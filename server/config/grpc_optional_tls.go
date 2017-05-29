@@ -1,4 +1,4 @@
-package main
+package config
 
 import (
 	"net"
@@ -15,13 +15,13 @@ type optionalTlsCreds struct {
 }
 
 // optionalTlsCreds acts as gRPC `credentials.TransportAuthenticator` but checks if the connection came from an TLS-configured listener.
-func newOptionalTlsCreds() *optionalTlsCreds {
+func NewOptionalTlsCreds() *optionalTlsCreds {
 	return &optionalTlsCreds{
 		tlsForPort: make(map[string]credentials.TransportCredentials),
 	}
 }
 
-func (c *optionalTlsCreds) addTlsListener(listener net.Listener, creds credentials.TransportCredentials) {
+func (c *optionalTlsCreds) AddTlsListener(listener net.Listener, creds credentials.TransportCredentials) {
 	_, port, _ := net.SplitHostPort(listener.Addr().String())
 	c.tlsForPort[port] = creds
 }

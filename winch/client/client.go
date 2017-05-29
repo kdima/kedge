@@ -5,8 +5,6 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-	"google.golang.org/grpc/credentials"
-
 	"github.com/Sirupsen/logrus"
 	google_protobuf "github.com/golang/protobuf/ptypes/empty"
 	pb_base "github.com/mwitkow/kedge/_protogen/base"
@@ -14,31 +12,22 @@ import (
 	"io"
 	"os"
 
-	"crypto/tls"
-
 	"google.golang.org/grpc"
+	"fmt"
 )
 
 var (
-	proxyHostPort = "127.0.0.1:8444" // use 8081 for plain text
+	proxyHostPort = "127.0.0.1:9081" // use 8081 for plain text
 )
 
-func addClientCerts(tlsConfig *tls.Config) {
-	cert, err := tls.LoadX509KeyPair("/home/dima/Private/Work/kedge/src/github.com/mwitkow/kedge/misc/client.crt", "/home/dima/Private/Work/kedge/src/github.com/mwitkow/kedge/misc/client.key")
-	if err != nil {
-		logrus.Fatal("failed loading client cert: %v", err)
-	}
-	tlsConfig.Certificates = []tls.Certificate{cert}
-}
-
 func main() {
-	tlsConfig := &tls.Config{
-		InsecureSkipVerify: true, // we use a self signed cert
-	}
-	addClientCerts(tlsConfig)
+	//tlsConfig := &tls.Config{
+	//	InsecureSkipVerify: true, // we use a self signed cert
+	//}
 	logrus.SetOutput(os.Stdout)
 	conn, err := grpc.Dial("controller.eu1-prod.improbable.local:9999",
-		grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)),
+		//grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)),
+		grpc.WithInsecure(),
 		grpc.WithDialer(spoofedGrpcDialer),
 	)
 	if err != nil {
@@ -53,6 +42,7 @@ func main() {
 	for {
 		msg, err := listClient.Recv()
 		if err == io.EOF {
+			fmt.Printf("client get eof")
 			break
 		} else if err != nil {
 			logrus.Fatalf("request failed mid way: %v", err)

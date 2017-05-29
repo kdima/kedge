@@ -1,4 +1,4 @@
-package main
+package config
 
 import (
 	"bytes"
@@ -28,7 +28,7 @@ var (
 		"Path to the jsonPB file configuring the backend pool.")
 )
 
-func buildRouterOrFail() (grpc_router.Router, http_router.Router, http_router.AdhocAddresser) {
+func BuildRouterOrFail() (grpc_router.Router, http_router.Router, http_router.AdhocAddresser) {
 	cnf := &pb_config.DirectorConfig{}
 	if err := readAsJson(*flagConfigDirectorPath, cnf); err != nil {
 		log.Fatalf("failed reading director director config: %v", err)
@@ -39,7 +39,7 @@ func buildRouterOrFail() (grpc_router.Router, http_router.Router, http_router.Ad
 	return grpcRouter, httpRouter, httpAddresser
 }
 
-func buildBackendPoolOrFail() (grpc_bp.Pool, http_bp.Pool) {
+func BuildBackendPoolOrFail() (grpc_bp.Pool, http_bp.Pool) {
 	cnf := &pb_config.BackendPoolConfig{}
 	if err := readAsJson(*flagConfigBackendPoolPath, cnf); err != nil {
 		log.Fatalf("failed reading backend pool config: %v", err)

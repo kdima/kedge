@@ -8,25 +8,21 @@ import (
 	"os"
 	"time"
 
-	"crypto/tls"
-	"strings"
-
 	log "github.com/Sirupsen/logrus"
 	"github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/mwitkow/go-conntrack"
-	"github.com/mwitkow/go-conntrack/connhelpers"
 	"github.com/mwitkow/go-flagz"
 	"github.com/mwitkow/go-grpc-middleware"
 	"github.com/mwitkow/go-grpc-middleware/logging/logrus"
 	"github.com/mwitkow/grpc-proxy/proxy"
-	grpc_director "github.com/mwitkow/kedge/grpc/director"
-	http_director "github.com/mwitkow/kedge/http/director"
 	"github.com/mwitkow/kedge/server/sharedflags"
 	"github.com/prometheus/client_golang/prometheus"
 	_ "golang.org/x/net/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"github.com/mwitkow/kedge/server/config"
+	"github.com/mwitkow/kedge/winch/lib"
+	"github.com/mwitkow/kedge/winch/interceptors"
 )
 
 var (
@@ -50,10 +46,17 @@ func main() {
 	logEntry := log.NewEntry(log.StandardLogger())
 	grpc_logrus.ReplaceGrpcLogger(logEntry)
 
-	grpcBe, httpBe := config.BuildBackendPoolOrFail()
-	grpcRouter, httpRouter, httpAddresser := config.BuildRouterOrFail()
-	grpcProxy := grpc_director.New(grpcBe, grpcRouter)
-	httpProxy := http_director.New(httpBe, httpRouter, httpAddresser)
+	//grpcBe, httpBe := config.BuildBackendPoolOrFail()
+	//grpcRouter, httpRouter, httpAddresser := config.BuildRouterOrFail()
+
+	//httpProxy := http_director.New(httpBe, httpRouter, httpAddresser)
+	// TODO (dima): winch does need a pool of kedges to talk to
+	kedgeConn, err := grpc.Dial("controller.eu1-prod.improbable.local:9999",
+		grpc.WithInsecure(), grpc.WithDialer(spoofedGrpcDialer), grpc.WithCodec(proxy.Codec()))
+	if err != nil {
+		log.Fatalf("could not create a kedge connection: %v", err)
+	}
+	grpcProxy := lib.New(kedgeConn)
 
 	grpcTlsCreds := config.NewOptionalTlsCreds() // allows the server to listen both over tLS and nonTLS at the same time.
 	grpcServer := grpc.NewServer(
@@ -61,11 +64,12 @@ func main() {
 		grpc.UnknownServiceHandler(proxy.TransparentHandler(grpcProxy)),
 		grpc_middleware.WithUnaryServerChain(
 			grpc_logrus.UnaryServerInterceptor(logEntry),
+			interceptors.UnaryServerInterceptorKedgeToken(),
 			grpc_prometheus.UnaryServerInterceptor,
 		),
 		grpc_middleware.WithStreamServerChain(
-			config.StreamServerInterceptorClientAuth(),
 			grpc_logrus.StreamServerInterceptor(logEntry),
+			interceptors.StreamServerInterceptorKedgeToken(),
 			grpc_prometheus.StreamServerInterceptor,
 		),
 		grpc.Creds(grpcTlsCreds),
@@ -76,27 +80,27 @@ func main() {
 
 	registerDebugHandlers()
 
-	httpServer := &http.Server{
-		WriteTimeout: *flagHttpMaxWriteTimeout,
-		ReadTimeout:  *flagHttpMaxReadTimeout,
-		ErrorLog:     nil, // TODO(mwitkow): Add this to log to logrus.
-		Handler: http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-			if strings.HasPrefix(req.Header.Get("content-type"), "application/grpc") {
-				grpcServer.ServeHTTP(w, req)
-			}
-			if strings.HasPrefix(req.URL.Path, "/debug") {
-				http.DefaultServeMux.ServeHTTP(w, req)
-			}
-			httpProxy.ServeHTTP(w, req)
-		}),
-	}
+	//httpServer := &http.Server{
+	//	WriteTimeout: *flagHttpMaxWriteTimeout,
+	//	ReadTimeout:  *flagHttpMaxReadTimeout,
+	//	ErrorLog:     nil, // TODO(mwitkow): Add this to log to logrus.
+	//	Handler: http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+	//		if strings.HasPrefix(req.Header.Get("content-type"), "application/grpc") {
+	//			grpcServer.ServeHTTP(w, req)
+	//		}
+	//		if strings.HasPrefix(req.URL.Path, "/debug") {
+	//			http.DefaultServeMux.ServeHTTP(w, req)
+	//		}
+	//		httpProxy.ServeHTTP(w, req)
+	//	}),
+	//}
 
 	errChan := make(chan error)
 
 	var grpcTlsListener net.Listener
 	var grpcPlainListener net.Listener
-	var httpPlainListener net.Listener
-	var httpTlsListener net.Listener
+	//var httpPlainListener net.Listener
+	//var httpTlsListener net.Listener
 	if *flagGrpcTlsPort != 0 {
 		grpcTlsListener = buildListenerOrFail("grpc_tls", *flagGrpcTlsPort)
 		grpcTlsCreds.AddTlsListener(grpcTlsListener, credentials.NewTLS(tlsConfig))
@@ -104,17 +108,17 @@ func main() {
 	if *flagGrpcInsecurePort != 0 {
 		grpcPlainListener = buildListenerOrFail("grpc_plain", *flagGrpcInsecurePort)
 	}
-	if *flagHttpPort != 0 {
-		httpPlainListener = buildListenerOrFail("http_plain", *flagHttpPort)
-	}
-	if *flagHttpTlsPort != 0 {
-		httpTlsListener = buildListenerOrFail("http_tls", *flagHttpTlsPort)
-		http2TlsConfig, err := connhelpers.TlsConfigWithHttp2Enabled(tlsConfig)
-		if err != nil {
-			log.Fatalf("failed setting up HTTP2 TLS config: %v", err)
-		}
-		httpTlsListener = tls.NewListener(httpTlsListener, http2TlsConfig)
-	}
+	//if *flagHttpPort != 0 {
+	//	httpPlainListener = buildListenerOrFail("http_plain", *flagHttpPort)
+	//}
+	//if *flagHttpTlsPort != 0 {
+	//	httpTlsListener = buildListenerOrFail("http_tls", *flagHttpTlsPort)
+	//	http2TlsConfig, err := connhelpers.TlsConfigWithHttp2Enabled(tlsConfig)
+	//	if err != nil {
+	//		log.Fatalf("failed setting up HTTP2 TLS config: %v", err)
+	//	}
+	//	httpTlsListener = tls.NewListener(httpTlsListener, http2TlsConfig)
+	//}
 
 	if grpcTlsListener != nil {
 		log.Infof("listening for gRPC TLS on: %v", grpcTlsListener.Addr().String())
@@ -132,24 +136,24 @@ func main() {
 			}
 		}()
 	}
-	if httpTlsListener != nil {
-		log.Infof("listening for HTTP TLS on: %v", httpTlsListener.Addr().String())
-		go func() {
-			if err := httpServer.Serve(httpTlsListener); err != nil {
-				errChan <- fmt.Errorf("http_tls server error: %v", err)
-			}
-		}()
-	}
-	if httpPlainListener != nil {
-		log.Infof("listening for HTTP Plain on: %v", httpPlainListener.Addr().String())
-		go func() {
-			if err := httpServer.Serve(httpPlainListener); err != nil {
-				errChan <- fmt.Errorf("http_plain server error: %v", err)
-			}
-		}()
-	}
+	//if httpTlsListener != nil {
+	//	log.Infof("listening for HTTP TLS on: %v", httpTlsListener.Addr().String())
+	//	go func() {
+	//		if err := httpServer.Serve(httpTlsListener); err != nil {
+	//			errChan <- fmt.Errorf("http_tls server error: %v", err)
+	//		}
+	//	}()
+	//}
+	//if httpPlainListener != nil {
+	//	log.Infof("listening for HTTP Plain on: %v", httpPlainListener.Addr().String())
+	//	go func() {
+	//		if err := httpServer.Serve(httpPlainListener); err != nil {
+	//			errChan <- fmt.Errorf("http_plain server error: %v", err)
+	//		}
+	//	}()
+	//}
 
-	err := <-errChan // this waits for some server breaking
+	err = <-errChan // this waits for some server breaking
 	log.Fatalf("Error: %v", err)
 }
 
@@ -183,4 +187,15 @@ func buildListenerOrFail(name string, port int) net.Listener {
 		conntrack.TrackWithTcpKeepAlive(20*time.Second),
 		conntrack.TrackWithTracing(),
 	)
+}
+
+func spoofedGrpcDialer(addr string, t time.Duration) (net.Conn, error) {
+	host, _, _ := net.SplitHostPort(addr)
+	fmt.Printf("addr is %s\n", addr)
+	switch host {
+	case "controller.eu1-prod.improbable.local":
+		return net.DialTimeout("tcp", "127.0.0.1:8081", t)
+	default:
+		return net.DialTimeout("tcp", addr, t)
+	}
 }

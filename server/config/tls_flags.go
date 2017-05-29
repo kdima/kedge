@@ -1,4 +1,4 @@
-package main
+package config
 
 import (
 	log "github.com/Sirupsen/logrus"
@@ -32,7 +32,7 @@ var (
 		"Controls whether a testclient certificate is required. Only used if server_tls_client_ca_files is not empty. If true, connections that don't have a testclient CA will be rejected.")
 )
 
-func buildServerTlsOrFail() *tls.Config {
+func BuildServerTlsOrFail() *tls.Config {
 
 	tlsConfig, err := connhelpers.TlsConfigForServerCerts(*flagTlsServerCert, *flagTlsServerKey)
 	if err != nil {

@@ -9,6 +9,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"fmt"
+	"net"
 )
 
 var (
@@ -34,17 +36,24 @@ func (r *router) Route(ctx context.Context, fullMethodName string) (backendName 
 	if !ok {
 		md = emptyMd
 	}
+	fmt.Printf("Metadata is %+v\n", md)
+	fmt.Printf("ctx is %+v\n", ctx)
+	fmt.Printf("method name is %s\n", fullMethodName)
 	if strings.HasPrefix(fullMethodName, "/") {
 		fullMethodName = fullMethodName[1:]
 	}
+	fmt.Printf("routes are %v\n", r.routes)
 	for _, route := range r.routes {
 		if !r.serviceNameMatches(fullMethodName, route.ServiceNameMatcher) {
+			fmt.Printf("srv matcher\n")
 			continue
 		}
 		if !r.authorityMatches(md, route.AuthorityMatcher) {
+			fmt.Printf("auth matcher\n")
 			continue
 		}
 		if !r.metadataMatches(md, route.MetadataMatcher) {
+			fmt.Printf("md matcher\n")
 			continue
 		}
 		return route.BackendName, nil
@@ -70,7 +79,12 @@ func (r *router) authorityMatches(md metadata.MD, matcher string) bool {
 	if !ok || len(auth) == 0 {
 		return false // there was no authority header and it was expected
 	}
-	return auth[0] == matcher
+	host, _, err := net.SplitHostPort(auth[0])
+	if err != nil {
+		fmt.Printf("could not split host and port\n")
+		return false
+	}
+	return host == matcher
 }
 
 func (r *router) metadataMatches(md metadata.MD, expectedKv map[string]string) bool {
