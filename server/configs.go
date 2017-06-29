@@ -14,6 +14,7 @@ import (
 	http_adhoc "github.com/mwitkow/kedge/http/director/adhoc"
 	http_router "github.com/mwitkow/kedge/http/director/router"
 	"github.com/mwitkow/kedge/lib/sharedflags"
+	"fmt"
 )
 
 var (

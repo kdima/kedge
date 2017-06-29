@@ -21,7 +21,7 @@ import (
 )
 
 var (
-	proxyHostPort = "https://127.0.0.1:8443" // use 8081 for plain text
+	proxyHostPort = "http://127.0.0.1:4142" // use 8081 for plain text
 )
 
 func addClientCerts(tlsConfig *tls.Config) {
@@ -36,11 +36,11 @@ func main() {
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: true, // we use a self signed cert
 	}
-	addClientCerts(tlsConfig)
+	//addClientCerts(tlsConfig)
 	logrus.SetOutput(os.Stdout)
 
 	kedgeUrl, _ := url.Parse(proxyHostPort)
-	conn, err := kedge_grpc.DialThroughKedge(context.TODO(), "controller.ext.cluster.local", tlsConfig, kedge_map.Single(kedgeUrl))
+	conn, err := kedge_grpc.DialThroughKedge(context.TODO(), "test", tlsConfig, kedge_map.Single(kedgeUrl))
 	if err != nil {
 		logrus.Fatalf("cannot dial: %v", err)
 	}
@@ -60,3 +60,6 @@ func main() {
 		logrus.Info("Flag: ", msg)
 	}
 }
+
+
+

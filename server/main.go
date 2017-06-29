@@ -28,6 +28,9 @@ import (
 	_ "golang.org/x/net/trace" // so /debug/requst gets registered.
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"github.com/mwitkow/kedge/grpc/interceptors"
+	"github.com/Bplotka/oidc"
+	"context"
 )
 
 var (
@@ -43,8 +46,10 @@ var (
 
 func main() {
 	if err := sharedflags.Set.Parse(os.Args); err != nil {
+		fmt.Printf("err is %v\n, err")
 		log.Fatalf("failed parsing flags: %v", err)
 	}
+
 	if err := flagz.ReadFileFlags(sharedflags.Set); err != nil {
 		log.Fatalf("failed reading flagz from files: %v", err)
 	}
@@ -53,6 +58,14 @@ func main() {
 	logEntry := log.NewEntry(log.StandardLogger())
 	grpc_logrus.ReplaceGrpcLogger(logEntry)
 	tlsConfig := buildServerTlsOrFail()
+	oidcVerifier, err := oidc.NewClient(context.Background(), "https://CHANGEMEAUTH")
+	if err != nil {
+		log.Fatalf("failed creating oidc client\n")
+	}
+	cffg := oidc.VerificationConfig{
+		ClientID:   "CHANGEMEID",
+	}
+	verifier := oidcVerifier.Verifier(cffg)
 
 	grpcServer := grpc.NewServer(
 		grpc.CustomCodec(proxy.Codec()), // needed for director to function.
@@ -64,6 +77,7 @@ func main() {
 		),
 		grpc_middleware.WithStreamServerChain(
 			grpc_ctxtags.StreamServerInterceptor(),
+			interceptors.StreamServerInterceptorClientAuth(true, verifier),
 			grpc_logrus.StreamServerInterceptor(logEntry),
 			grpc_prometheus.StreamServerInterceptor,
 		),
@@ -151,7 +165,7 @@ func main() {
 		}()
 	}
 
-	err := <-errChan // this waits for some server breaking
+	err = <-errChan // this waits for some server breaking
 	log.Fatalf("Error: %v", err)
 }
 

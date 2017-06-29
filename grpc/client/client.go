@@ -2,8 +2,6 @@ package kedge_grpc
 
 import (
 	"crypto/tls"
-	"errors"
-
 	"github.com/mwitkow/kedge/lib/map"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -20,9 +18,9 @@ func DialThroughKedge(ctx context.Context, targetAuthority string, clientTls *tl
 		return nil, err
 	}
 	if kedgeUrl.Scheme == "https" {
-		if clientTls == nil || (len(clientTls.Certificates) == 0 && clientTls.GetCertificate == nil) {
-			return nil, errors.New("dialing through kedge requires a tls.Config with client-side certificates")
-		}
+		//if clientTls == nil || (len(clientTls.Certificates) == 0 && clientTls.GetCertificate == nil) {
+		//	return nil, errors.New("dialing through kedge requires a tls.Config with client-side certificates")
+		//}
 		transportCreds := credentials.NewTLS(clientTls)
 		transportCreds = &proxiedTlsCredentials{TransportCredentials: transportCreds, authorityNameOverride: targetAuthority}
 		grpcOpts = append(grpcOpts, grpc.WithTransportCredentials(transportCreds))

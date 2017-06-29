@@ -10,7 +10,7 @@
           }
         ],
         "srv": {
-          "dns_name": "_grpc._tcp.controller.default.svc.cluster.local"
+          "dns_name": "CHANGEME"
         }
       }
     ]
@@ -21,7 +21,7 @@
         "name": "controller",
         "balancer": "ROUND_ROBIN",
         "srv": {
-          "dns_name": "_http._tcp.controller.default.svc.cluster.local"
+          "dns_name": "CHANGEME"
         }
       }
     ]
